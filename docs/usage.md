@@ -33,8 +33,38 @@ igg_ctrl,2,READ1_FASTQ.gz,READ2_FASTQ.gz,
 | `fastq_1`   | Full path to FastQ file for read 1. File has to be zipped and have the extension ".fastq.gz" or ".fq.gz".   |
 | `fastq_2`   | Full path to FastQ file for read 2. File has to be zipped and have the extension ".fastq.gz" or ".fq.gz".   |
 | `control`   | String representing the control group in the `group` column to which this replicate is assigned to.         |
+| `target`    | _(optional)_ Antibody/epitope target label used to group conditions for cross-condition consensus peaks.     |
 
 An [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
+
+### Targets across experimental conditions
+
+A `group` is the unit of biological replicates that are pooled together when
+`--merge_replicates` is used (see [Merging replicates](#merging-replicates)). If
+you profile the same antibody target across several experimental conditions, you
+can give each condition its own `group` and tag them with a shared, optional
+`target` column. Groups that share a `target` but differ by condition are then
+combined into a per-target consensus peak set across conditions.
+
+For example, profiling `RUNX1` and `RUNX3` across `early`, `late` and `naive`
+conditions, with condition-specific IgG controls:
+
+```bash
+group,replicate,fastq_1,fastq_2,control,target
+RUNX1_early,1,READ1_FASTQ.gz,READ2_FASTQ.gz,igg_early,RUNX1
+RUNX1_late,1,READ1_FASTQ.gz,READ2_FASTQ.gz,igg_late,RUNX1
+RUNX1_naive,1,READ1_FASTQ.gz,READ2_FASTQ.gz,igg_naive,RUNX1
+RUNX3_early,1,READ1_FASTQ.gz,READ2_FASTQ.gz,igg_early,RUNX3
+RUNX3_late,1,READ1_FASTQ.gz,READ2_FASTQ.gz,igg_late,RUNX3
+igg_early,1,READ1_FASTQ.gz,READ2_FASTQ.gz,,
+igg_late,1,READ1_FASTQ.gz,READ2_FASTQ.gz,,
+igg_naive,1,READ1_FASTQ.gz,READ2_FASTQ.gz,,
+```
+
+If a shared isotype control is appropriate for several conditions, point the
+relevant rows at the same control group instead of a condition-specific one. If
+the `target` column is omitted it defaults to the `group` name, preserving the
+previous behaviour.
 
 ## Running the pipeline
 
@@ -155,6 +185,22 @@ This pipeline currently provides peak calling via `SEACR` or `MACS2` using the `
 ### Consensus Peaks
 
 After peak calling, consensus peaks will be calculated based on merging peaks within the same groups. The number of replicates required for a valid peak can be changed using `replicate_threshold`. In some situations a user may which to call consensus peaks based on all samples, this can be configured by changing the `consensus_peak_mode` parameter from `group` to `all`.
+
+### Merging replicates
+
+By default the pipeline calls peaks on each replicate independently and then merges the resulting peak _intervals_ into a consensus set (reproducibility filtering). It does not pool the underlying _signal_. nf-core/atacseq, by contrast, merges replicate BAMs before peak calling so peaks are called on a deeper, lower-noise "merged library".
+
+A naive BAM merge is not appropriate for CUT&RUN because it would discard the per-replicate spike-in normalisation (a deeper-sequenced replicate would dominate the pool regardless of its per-cell epitope abundance). However, the bedGraph/bigWig tracks the pipeline already produces are spike-in scaled (`bedtools genomecov -scale s_i`, with `s_i = normalisation_c / spikein_reads`). Averaging these already-scaled tracks position-by-position preserves the spike-in normalisation while reducing per-replicate noise.
+
+Setting `--merge_replicates` enables this behaviour. For each `group` the pipeline:
+
+- averages the spike-in normalised replicate tracks into a single pooled track;
+- writes a pooled bigWig for browsing (on the same scale as the per-replicate tracks);
+- calls peaks on the pooled target track (against the pooled control track, if controls are provided) with SEACR in `non` mode, so the spike-in correction is not undone.
+
+In addition, when groups share a `target` (see [Targets across experimental conditions](#targets-across-experimental-conditions)), the per-group merged peaks are combined into a per-target consensus peak set across conditions. Outputs are written under `03_peak_calling/07_merged_replicates`.
+
+Merged-signal peak calling is performed with SEACR only, since it operates directly on the normalised tracks; MACS2 (which requires BAM input) continues to be run per replicate.
 
 ### Reproducibility
 

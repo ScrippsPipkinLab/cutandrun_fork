@@ -349,6 +349,24 @@ MACS2 has its main parameters exposed through the pipeline configuration. The de
 
 The merge function from [BEDtools](https://github.com/arq5x/bedtools2) is used to merge replicate peaks of the same experimental group to create a consensus peak set. This can then optionally be filtered for consensus peaks contributed to be a threshold number of replicates using `--replicate_threshold`.
 
+### 6.6. <a name='MergedReplicates'></a>Merged Replicates
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `03_peak_calling/07_merged_replicates/01_bedgraph/`
+  - `*.merged.bedGraph`: Spike-in normalised replicate tracks averaged into a single pooled track per group.
+- `03_peak_calling/07_merged_replicates/02_bigwig/`
+  - `*.merged.bigWig`: Pooled coverage track for browsing, on the same scale as the per-replicate tracks.
+- `03_peak_calling/07_merged_replicates/03_called_peaks/`
+  - `*.merged.seacr.peaks.stringent.bed`: SEACR peaks called on the pooled signal (against the pooled control where provided).
+- `03_peak_calling/07_merged_replicates/04_consensus_peaks/`
+  - `*.merged.seacr.consensus.peak_counts.bed` / `*.merged.seacr.consensus.peaks.awk.bed`: Cross-condition consensus peaks for groups that share a `target`.
+
+</details>
+
+When `--merge_replicates` is set, biological replicates of the same group are pooled by averaging their spike-in normalised tracks. Peaks are then called on the deeper, lower-noise pooled signal with [SEACR](https://github.com/FredHutch/SEACR) (in `non` mode to preserve the spike-in correction), and a pooled bigWig is produced for visualisation. Groups that share a `target` are additionally combined into a per-target consensus peak set across experimental conditions. See [Merging replicates](usage.md#merging-replicates) for details.
+
 ## 7. <a name='Peak-basedQC'></a>Peak-based QC
 
 Once the peak calling process is complete, we run a separate set of reports that analyse the quality of the results at the peak level.

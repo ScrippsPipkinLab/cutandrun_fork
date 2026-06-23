@@ -74,6 +74,18 @@ def check_samplesheet(file_in, file_out, use_control):
     KO,1,KO_LIB1_REP1_1.fastq.gz,KO_LIB1_REP1_2.fastq.gz,CONTROL_GROUP
     CONTROL_GROUP,1,KO_LIB1_REP1_1.fastq.gz,IGG_LIB1_REP1_2.fastq.gz,
     CONTROL_GROUP,2,KO_LIB1_REP1_1.fastq.gz,IGG_LIB1_REP1_2.fastq.gz,
+
+    An optional trailing "target" column may be supplied. It labels the antibody
+    target / epitope of a group so that groups sharing the same target but coming
+    from different experimental conditions can be combined for cross-condition
+    consensus peaks. When omitted the target defaults to the group name.
+
+    group,replicate,fastq_1,fastq_2,control,target
+    RUNX1_early,1,r1e_1.fastq.gz,r1e_2.fastq.gz,igg_early,RUNX1
+    RUNX1_late,1,r1l_1.fastq.gz,r1l_2.fastq.gz,igg_late,RUNX1
+    RUNX3_early,1,r3e_1.fastq.gz,r3e_2.fastq.gz,igg_early,RUNX3
+    igg_early,1,ige_1.fastq.gz,ige_2.fastq.gz,,
+    igg_late,1,igl_1.fastq.gz,igl_2.fastq.gz,,
     """
 
     # Init
@@ -103,6 +115,16 @@ def check_samplesheet(file_in, file_out, use_control):
             print("ERROR: Please check samplesheet header -> {} != {}".format(",".join(header), ",".join(HEADER)))
             sys.exit(1)
 
+        ## Detect optional "target" column (must immediately follow the mandatory columns)
+        target_present = len(header) > HEADER_LEN and header[HEADER_LEN] == "target"
+        if len(header) > HEADER_LEN and not target_present:
+            print(
+                "ERROR: Please check samplesheet header -> the only supported optional column is 'target' -> {}".format(
+                    ",".join(header)
+                )
+            )
+            sys.exit(1)
+
         ## Check sample entries
         line_no = 1
         for line in fin:
@@ -113,10 +135,11 @@ def check_samplesheet(file_in, file_out, use_control):
                 continue
 
             ## Check valid number of columns per row
-            if len(lspl) != HEADER_LEN:
+            max_cols = HEADER_LEN + 1 if target_present else HEADER_LEN
+            if len(lspl) < HEADER_LEN or len(lspl) > max_cols:
                 print_error(
                     "Invalid number of columns (found {} should be {})! - line no. {}".format(
-                        len(lspl), len(HEADER), line_no
+                        len(lspl), max_cols, line_no
                     ),
                     "Line",
                     line,
@@ -137,6 +160,14 @@ def check_samplesheet(file_in, file_out, use_control):
 
             ## Check sample name entries
             sample, replicate, fastq_1, fastq_2, control = lspl[: len(HEADER)]
+
+            ## Parse the optional target column (defaults to the group name)
+            target = lspl[HEADER_LEN] if (target_present and len(lspl) > HEADER_LEN) else ""
+            if not target:
+                target = sample
+            if target.find(" ") != -1:
+                print_error("Target entry contains spaces!", "Line", line)
+
             if sample:
                 if sample.find(" ") != -1:
                     print_error("Group entry contains spaces!", "Line", line)
@@ -179,9 +210,9 @@ def check_samplesheet(file_in, file_out, use_control):
             ## Auto-detect paired-end/single-end
             sample_info = []
             if sample and fastq_1 and fastq_2:  ## Paired-end short reads
-                sample_info = [sample, str(replicate), control, "0", fastq_1, fastq_2]
+                sample_info = [sample, str(replicate), control, "0", fastq_1, fastq_2, target]
             elif sample and fastq_1 and not fastq_2:  ## Single-end short reads
-                sample_info = [sample, str(replicate), control, "1", fastq_1, fastq_2]
+                sample_info = [sample, str(replicate), control, "1", fastq_1, fastq_2, target]
             else:
                 print_error("Invalid combination of columns provided!", "Line", line)
 
@@ -278,7 +309,9 @@ def check_samplesheet(file_in, file_out, use_control):
         make_dir(out_dir)
         with open(file_out, "w") as fout:
             fout.write(
-                ",".join(["id", "group", "replicate", "control", "single_end", "fastq_1", "fastq_2", "is_control"])
+                ",".join(
+                    ["id", "group", "replicate", "control", "single_end", "fastq_1", "fastq_2", "target", "is_control"]
+                )
                 + "\n"
             )
             for sample in sorted(sample_run_dict.keys()):

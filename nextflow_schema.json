@@ -410,6 +410,11 @@
                     "fa_icon": "fas fa-align-justify",
                     "description": "MACS2 broad cutoff parameter"
                 },
+                "merge_replicates": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-align-justify",
+                    "description": "Pool biological replicates by averaging their spike-in normalised tracks, then build a merged bigWig and call peaks on the pooled signal with SEACR. Also computes cross-condition consensus peaks for groups that share a `target` in the samplesheet."
+                },
                 "consensus_peak_mode": {
                     "type": "string",
                     "default": "group",

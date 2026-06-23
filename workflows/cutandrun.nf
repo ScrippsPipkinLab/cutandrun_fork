@@ -126,6 +126,9 @@ include { MARK_DUPLICATES_PICARD                           } from "../subworkflo
 include { MARK_DUPLICATES_PICARD as DEDUPLICATE_PICARD     } from "../subworkflows/local/mark_duplicates_picard"
 include { CONSENSUS_PEAKS                                  } from "../subworkflows/local/consensus_peaks"
 include { CONSENSUS_PEAKS as CONSENSUS_PEAKS_ALL           } from "../subworkflows/local/consensus_peaks"
+include { CONSENSUS_PEAKS as CONSENSUS_PEAKS_TARGET        } from "../subworkflows/local/consensus_peaks"
+include { MERGE_REPLICATES                                 } from "../subworkflows/local/merge_replicates"
+include { AWK as AWK_NAME_PEAK_BED_MERGED                  } from "../modules/local/linux/awk"
 include { EXTRACT_FRAGMENTS                                } from "../subworkflows/local/extract_fragments"
 include { PREPARE_PEAKCALLING                              } from "../subworkflows/local/prepare_peakcalling"
 include { DEEPTOOLS_QC                                     } from "../subworkflows/local/deeptools_qc"
@@ -442,6 +445,10 @@ workflow CUTANDRUN {
     ch_peaks_summits          = Channel.empty()
     ch_consensus_peaks        = Channel.empty()
     ch_consensus_peaks_unfilt = Channel.empty()
+    ch_merged_bedgraph        = Channel.empty()
+    ch_merged_bigwig          = Channel.empty()
+    ch_merged_peaks           = Channel.empty()
+    ch_consensus_peaks_target = Channel.empty()
     if(params.run_peak_calling) {
         /*
         * SUBWORKFLOW: Convert BAM files to bedgraph/bigwig and apply configured normalisation strategy
@@ -675,6 +682,58 @@ workflow CUTANDRUN {
             ch_software_versions      = ch_software_versions.mix(CONSENSUS_PEAKS.out.versions)
             // EXAMPLE CHANNEL STRUCT: [[META], BED]
             //CONSENSUS_PEAKS.out.bed | view
+        }
+
+        if(params.run_merge_replicates) {
+            /*
+            * SUBWORKFLOW: Pool biological replicates by averaging their spike-in
+            * normalised tracks, then build a merged bigWig and call peaks on the
+            * pooled "merged library" with SEACR.
+            */
+            MERGE_REPLICATES (
+                ch_bedgraph,
+                PREPARE_GENOME.out.chrom_sizes.collect(),
+                params.use_control
+            )
+            ch_merged_bedgraph   = MERGE_REPLICATES.out.bedgraph
+            ch_merged_bigwig     = MERGE_REPLICATES.out.bigwig
+            ch_merged_peaks      = MERGE_REPLICATES.out.peaks
+            ch_software_versions = ch_software_versions.mix(MERGE_REPLICATES.out.versions)
+            // EXAMPLE CHANNEL STRUCT: [[META], BED]
+            //MERGE_REPLICATES.out.peaks | view
+
+            /*
+            * MODULE: Add sample identifier column to merged peak beds
+            */
+            AWK_NAME_PEAK_BED_MERGED (
+                ch_merged_peaks
+            )
+            ch_software_versions = ch_software_versions.mix(AWK_NAME_PEAK_BED_MERGED.out.versions)
+
+            /*
+            * CHANNEL: Group merged peaks by target across conditions, keeping only
+            * targets that span more than one experimental group/condition
+            */
+            AWK_NAME_PEAK_BED_MERGED.out.file
+            .map { row -> [ row[0].target, row[1] ] }
+            .groupTuple(by: [0])
+            .map { row -> [ [id: row[0]], row[1].flatten(), row[1].size() ] }
+            .filter { row -> row[2] > 1 }
+            .map { row -> [ row[0], row[1] ] }
+            .set { ch_merged_peaks_target }
+            // EXAMPLE CHANNEL STRUCT: [[id: <TARGET>], [BED1, BED2, BEDn...]]
+            //ch_merged_peaks_target | view
+
+            /*
+            * SUBWORKFLOW: Construct cross-condition consensus peaks per target
+            */
+            CONSENSUS_PEAKS_TARGET (
+                ch_merged_peaks_target
+            )
+            ch_consensus_peaks_target = CONSENSUS_PEAKS_TARGET.out.filtered_bed
+            ch_software_versions      = ch_software_versions.mix(CONSENSUS_PEAKS_TARGET.out.versions)
+            // EXAMPLE CHANNEL STRUCT: [[META], BED]
+            //CONSENSUS_PEAKS_TARGET.out.filtered_bed | view
         }
     }
 

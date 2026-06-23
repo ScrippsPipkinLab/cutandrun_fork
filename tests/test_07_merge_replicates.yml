@@ -1,0 +1,11 @@
+- name: test_merge_replicates
+  command: nextflow run main.nf -profile docker,test_full_small --only_peak_calling --skip_fastqc --skip_multiqc --skip_preseq --merge_replicates -c tests/config/nextflow.config
+  tags:
+    - test_merge_replicates
+  files:
+    - path: results/03_peak_calling/07_merged_replicates/01_bedgraph/h3k27me3.merged.bedGraph
+    - path: results/03_peak_calling/07_merged_replicates/01_bedgraph/h3k4me3.merged.bedGraph
+    - path: results/03_peak_calling/07_merged_replicates/02_bigwig/h3k27me3.merged.bigWig
+    - path: results/03_peak_calling/07_merged_replicates/02_bigwig/h3k4me3.merged.bigWig
+    - path: results/03_peak_calling/07_merged_replicates/03_called_peaks/h3k27me3.merged.seacr.peaks.stringent.bed
+    - path: results/03_peak_calling/07_merged_replicates/03_called_peaks/h3k4me3.merged.seacr.peaks.stringent.bed

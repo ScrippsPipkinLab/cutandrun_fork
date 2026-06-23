@@ -3,6 +3,13 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Enhancements
+
+- Added `--merge_replicates` to pool biological replicates by averaging their spike-in normalised tracks, then call peaks on the pooled signal with SEACR and publish a pooled bigWig per group (atacseq-style merged-signal peak calling without merging raw BAMs).
+- Added an optional `target` samplesheet column. Groups that share a `target` but come from different experimental conditions are combined into a per-target consensus peak set across conditions when `--merge_replicates` is enabled.
+
 ## [3.2.2] - 2024-02-01
 
 ### Enhancements
