@@ -59,6 +59,16 @@ The pipeline has been developed with continuous integration (CI) and test driven
 16. Genome browser session ([`IGV`](https://software.broadinstitute.org/software/igv/))
 17. Present all QC in web-based report ([`MultiQC`](http://multiqc.info/))
 
+## Fork additions: replicate merging & cross-condition consensus
+
+This fork adds an optional, opt-in path (enabled with `--merge_replicates`, off by default) that pools biological replicates **before** peak calling, in the style of [nf-core/atacseq](https://nf-co.re/atacseq):
+
+- **Peak calling on combined replicates.** The bedGraph/bigWig tracks produced by the pipeline are already spike-in normalised (`bedtools genomecov -scale s_i`, with `s_i = normalisation_c / spikein_reads`). For each group the spike-in–scaled replicate tracks are averaged position-by-position (`bedtools unionbedg`, mean), and the matching IgG replicates are averaged the same way. [`SEACR`](https://github.com/FredHutch/SEACR) is then run on the pooled target vs pooled control in `non` mode, so the spike-in correction is preserved. This gives deeper, lower-noise peak calls without ever merging raw BAMs (which would discard the normalisation).
+- **bigWigs for combined replicates.** A pooled bigWig is published per group, on the same scale as the per-replicate tracks, for browsing.
+- **Consensus peaks across conditions for the same target.** An optional `target` samplesheet column labels the antibody/epitope. Groups that share a `target` but differ by experimental condition (e.g. `RUNX1_early`, `RUNX1_late`, `RUNX1_naive` all with `target=RUNX1`) are combined into a per-target consensus peak set across conditions. Controls can be shared or condition-specific via the existing `control` column.
+
+Outputs are written under `03_peak_calling/07_merged_replicates/`. Merged-signal peak calling uses SEACR only (it operates directly on the normalised tracks); MACS2, which needs BAM input, continues to run per replicate. The default pipeline behaviour is unchanged when `--merge_replicates` is not set. See [`docs/usage.md`](docs/usage.md#merging-replicates) and [`docs/output.md`](docs/output.md) for details, and the example samplesheet with a `target` column in [`docs/usage.md`](docs/usage.md#targets-across-experimental-conditions).
+
 ## Usage
 
 > [!NOTE]

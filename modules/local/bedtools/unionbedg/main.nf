@@ -28,10 +28,17 @@ process BEDTOOLS_UNIONBEDG_MEAN {
     # the per-replicate signal columns. Averaging (not summing) keeps the pooled
     # track in the same dynamic range as a single replicate and preserves the
     # per-cell spike-in scale.
-    bedtools unionbedg -i $files \\
-        | awk -v n=$n 'BEGIN{ OFS="\\t" } { sum = 0; for (i = 4; i <= 3 + n; i++) sum += \$i; print \$1, \$2, \$3, sum / n }' \\
-        | sort -T '.' -k1,1 -k2,2n \\
-        > ${prefix}.bedGraph
+    #
+    # bedtools unionbedg requires at least two inputs, so when a group has a
+    # single replicate the pooled track is simply that replicate (mean of one).
+    if [ "$n" -eq 1 ]; then
+        sort -T '.' -k1,1 -k2,2n $files > ${prefix}.bedGraph
+    else
+        bedtools unionbedg -i $files \\
+            | awk -v n=$n 'BEGIN{ OFS="\\t" } { sum = 0; for (i = 4; i <= 3 + n; i++) sum += \$i; print \$1, \$2, \$3, sum / n }' \\
+            | sort -T '.' -k1,1 -k2,2n \\
+            > ${prefix}.bedGraph
+    fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
